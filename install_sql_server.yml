@@ -9,45 +9,34 @@
     -                   sefton2.yaocm.id.au
   tasks:
   
-  - name:               "Restrict Installation to OL8"
+  - name:               "Restrict Installation to OL7"
     assert:
-      msg:              "Restrict Installation to OL8"
+      msg:              "Restrict Installation to OL7"
       that: >
                         ansible_distribution == "OracleLinux" and
-                        ansible_distribution_major_version >= '8'
+                        ansible_distribution_major_version == '7'
   
   - name:               "Set MS-SQL/Server Configuration"
     set_fact:
       mssql_tcp_port:   1433
-      db_password:      "MSsqlSA"
+      db_password:      "MSsqlSA7"
 
-  - name:               "Add Microsoft yum repositories for SQL Server 2019 on RHEL 8"
-    yum_repository:
-      name:             "mssql-server.repo"
-      description:      "Microsoft SQL Server 2019 Red Hat repository"
-      baseurl:
-        -               https://packages.microsoft.com/config/rhel/8/mssql-server-2019.repo
-      gpgkey:           https://packages.microsoft.com/keys/microsoft.asc
-      gpgcheck:         true
-      state:            present
+  - name:               "Add Microsoft yum repositories for SQL Server 2019 on RHEL 7"
+    get_url:
+      url:              "https://packages.microsoft.com/config/rhel/7/{{ item.url }}"
+      dest:             "/etc/yum.repos.d/{{ item.dest }}"
     become:             yes
     become_user:        root
+    with_items:
+      - { url: mssql-server-2019.repo, dest: mssql-server.repo }
+      - { url: prod.repo, dest: msprod.repo }
 
-  - name:               "Install Python2 on OL8"
+  - name:               "Remove Old Packages"
     yum:
       name:
-        -               python2
-        -               compat-openssl10
-      state:            present
-    become:             yes
-    become_user:        root
-    when:
-      -                 ansible_distribution == "OracleLinux"
-      -                 ansible_distribution_major_version >= '8'
-
-  - name:               "Configure Python2 as the default interpreter"
-    alternatives:
-      name:             python
+        -               unixODBC-utf16
+        -               unixODBC-utf16-devel
+      state:            absent
     become:             yes
     become_user:        root
 
@@ -58,12 +47,16 @@
         -               mssql-tools 
         -               unixODBC-devel
       state:            present
-    register:           install_mssql_server
     become:             yes
     become_user:        root
     environment:
       - ACCEPT_EULA:    Y
 
+  - name:               "Get Current State of MS-SQL/Server Service"
+    systemd:
+      name:             mssql-server
+    register:           sql_server
+  
   - name:               "Run SQL Server setup mssql-conf"
     command:            /opt/mssql/bin/mssql-conf -n setup accept-eula
     environment:
@@ -73,7 +66,19 @@
       - MSSQL_TCP_PORT: "{{ mssql_tcp_port }}"
     become:             yes
     become_user:        root
-    when:               install_mssql_server is changed
+    when:
+      -                 sql_server.status.SubState is defined
+      -                 sql_server.status.SubState == "dead"
+
+  - name:               "Add firewalld settings"
+    firewalld:
+      zone:             public
+      port:             "{{ mssql_tcp_port }}/tcp"
+      permanent:        true
+      state:            enabled
+    become:             yes
+    become_user:        root
+    notify:             Reload FireWall Rules
 
   - name:               "Ensure the MSSQL service is started"
     service:
@@ -93,14 +98,6 @@
 # ------------------------------------------------------------------------------
 # Handlers
 # ------------------------------------------------------------------------------
-
-  - name:               "Add firewalld settings"
-    firewalld:
-      zone:             public
-      port:             "{{ mssql_tcp_port }}/tcp"
-      permanent:        true
-      state:            enabled
-    notify:             restart firewall
   
   handlers:
   - name:               "Reload FireWall Rules"
