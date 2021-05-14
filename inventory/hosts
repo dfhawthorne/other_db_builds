@@ -1,2 +1,13 @@
-sefton1.yaocm.id.au
-sefton2.yaocm.id.au
+---
+sql_server:
+  hosts:
+    sefton1.yaocm.id.au:
+    sefton2.yaocm.id.au:
+  vars:
+    ansible_python_interpreter:     /usr/bin/python2
+mysql:
+  hosts:
+    manly.yaocm.id.au:
+      ansible_python_interpreter:   /usr/bin/python3
+      ansible_host:                 192.168.1.126
+...

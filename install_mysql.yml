@@ -1,0 +1,62 @@
+---
+# ------------------------------------------------------------------------------
+# 2.5.1 Installing MySQL on Linux Using the MySQL Yum Repository
+#   https://dev.mysql.com/doc/refman/8.0/en/linux-installation-yum-repo.html
+# ------------------------------------------------------------------------------
+
+- hosts:
+    -                   mysql
+
+  vars:
+    distro:             mysql80-community-release-el8-1.noarch.rpm
+    software_dir:       "/var/Software"
+    distro_dir:         "/opt/share/Software/MySQL"
+    auto_direct:        "/etc/auto.direct"
+    
+  tasks:
+  
+  - name:               "Restrict Installation to OL8"
+    assert:
+      msg:              "Restrict Installation to OL8"
+      that: >
+                        ansible_distribution == "OracleLinux" and
+                        ansible_distribution_major_version == '8'
+
+  - name:               "Run root tasks"
+    block:
+
+    - name:             "Copy RPM to Software Directory"
+      copy:
+        src:            "{{ distro_dir }}/{{ distro }}"
+        dest:           "{{ software_dir }}/"
+        checksum:       "3c8767261a5c53e3faee2b6266c4d039abad46f9"
+
+    - name:             "Set up for Install of MySQL"
+      dnf:
+        name:           "{{ software_dir }}/{{ distro }}"
+        state:          present
+
+    - name:             "Enabling the Correct MySQL Repo"
+      script:
+        cmd:            scripts/enable_mysql_repo.sh
+      register:         adjust_repo
+
+    - name:             "Display results of MySQL Repo"
+      debug:
+        var:            adjust_repo.stdout_lines
+      when:             adjust_repo.stdout_lines is defined
+      
+    - name:             "Install community edition of MySQL"
+      dnf:
+        name:           mysql-community-server
+        state:          present
+
+    - name:             "Enable MySQL server"
+      systemd:
+        name:           mysqld
+        enabled:        yes
+        state:          started
+
+    become:             yes
+    become_user:        root
+...
