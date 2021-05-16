@@ -57,6 +57,14 @@
         enabled:        yes
         state:          started
 
+    - name:             "Enable fire wall for MySQL"
+      firewalld:
+        immediate:      yes
+        permanent:      yes
+        service:        mysql
+        state:          enabled
+        zone:           public
+
     become:             yes
     become_user:        root
 ...
